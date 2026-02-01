@@ -4,55 +4,59 @@ import tempfile
 from flask import Flask, request, jsonify
 from gradio_client import Client, handle_file
 
-# -------------------------
-# CONFIG
-# -------------------------
-# Hugging Face Space
-HF_SPACE = "chemoiko/banana-disease-api"
-API_NAME = "/predict"
-HF_TOKEN = os.environ.get("HF_TOKEN")  # if your space is private
-
-# -------------------------
-# FLASK APP
-# -------------------------
 app = Flask(__name__)
-client = Client(HF_SPACE, hf_token=HF_TOKEN)
+
+# Connect to your Hugging Face Space
+client = Client("chemoiko/banana-disease-api")
+API_NAME = "/predict"
 
 @app.route('/')
 def hello_world():
-    return '🍌 Banana Disease API is running!'
+    return '🍌 Banana disease API is running!'
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint for Render"""
+    return jsonify({"status": "healthy"}), 200
 
 @app.route('/predict', methods=['POST'])
 def predict():
+    tmp_path = None
     try:
+        # Get JSON from Flutter
         data = request.get_json()
-        if not data or "image_base64" not in data:
+        if "image_base64" not in data:
             return jsonify({"error": "No image provided"}), 400
-
-        # Decode base64 and save temp file
+        
+        # Decode the base64 image into bytes and save temporarily
         image_bytes = base64.b64decode(data["image_base64"])
+        
+        # Use tempfile for better handling on Render
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
             tmp_file.write(image_bytes)
             tmp_path = tmp_file.name
-
+        
         # Send image to Hugging Face Space
         result = client.predict(
             img=handle_file(tmp_path),
             api_name=API_NAME
         )
-
-        # Cleanup temp file
-        os.remove(tmp_path)
-
-        # Return prediction
+        
+        # Return prediction to Flutter
         return jsonify({"prediction": result[0], "details": result[1]})
-
+        
     except Exception as e:
+        print(f"Error: {str(e)}")  # Log error for debugging
         return jsonify({"error": str(e)}), 500
+    
+    finally:
+        # Delete temp file (even if error occurs)
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except:
+                pass
 
-# -------------------------
-# MAIN
-# -------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
