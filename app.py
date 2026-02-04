@@ -7,7 +7,7 @@ from gradio_client import Client, handle_file
 app = Flask(__name__)
 
 # Connect to your Hugging Face Space
-client = Client("chemoiko/banana-disease-api")
+client = Client("chemoiko/banana-resnet-5000")
 API_NAME = "/predict"
 
 @app.route('/')
